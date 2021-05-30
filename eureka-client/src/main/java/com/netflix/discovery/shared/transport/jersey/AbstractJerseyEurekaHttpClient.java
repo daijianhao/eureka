@@ -35,6 +35,9 @@ public abstract class AbstractJerseyEurekaHttpClient implements EurekaHttpClient
     protected static final String HTML = "html";
 
     protected final Client jerseyClient;
+    /**
+     * 目标eureka server的endpoint 地址
+     */
     protected final String serviceUrl;
 
     protected AbstractJerseyEurekaHttpClient(Client jerseyClient, String serviceUrl) {

@@ -42,6 +42,8 @@ import org.slf4j.LoggerFactory;
  * node it represents.
  * <p>
  *
+ *
+ * 表示一个 其他的eureka server节点
  * @author Karthik Ranganathan, Greg Kim
  *
  */
@@ -101,6 +103,7 @@ public class PeerEurekaNode {
 
         String batcherName = getBatcherName();
         ReplicationTaskProcessor taskProcessor = new ReplicationTaskProcessor(targetHost, replicationClient);
+        //创建批处理任务分发器
         this.batchingDispatcher = TaskDispatchers.createBatchingTaskDispatcher(
                 batcherName,
                 config.getMaxElementsInPeerReplicationPool(),
@@ -133,10 +136,12 @@ public class PeerEurekaNode {
      */
     public void register(final InstanceInfo info) throws Exception {
         long expiryTime = System.currentTimeMillis() + getLeaseRenewalOf(info);
+        //批处理
         batchingDispatcher.process(
                 taskId("register", info),
                 new InstanceReplicationTask(targetHost, Action.Register, info, null, true) {
                     public EurekaHttpResponse<Void> execute() {
+                        //通过复制客户端，发送给其他eureka server
                         return replicationClient.register(info);
                     }
                 },

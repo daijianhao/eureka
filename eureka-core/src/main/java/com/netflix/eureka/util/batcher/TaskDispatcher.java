@@ -13,6 +13,9 @@ package com.netflix.eureka.util.batcher;
  * To create non batched executor call {@link TaskDispatchers#createNonBatchingTaskDispatcher(String, int, int, long, long, TaskProcessor)}
  * method. Batched executor is created by {@link TaskDispatchers#createBatchingTaskDispatcher(String, int, int, int, long, long, TaskProcessor)}.
  *
+ *
+ * 任务分发器，主要是用在 某一个eureka server收到register 或 renew 或 cancel 或 evict 时，将操作批量同步给其他eureka server
+ *
  * @author Tomasz Bak
  */
 public interface TaskDispatcher<ID, T> {

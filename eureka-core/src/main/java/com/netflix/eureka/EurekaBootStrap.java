@@ -106,6 +106,8 @@ public class EurekaBootStrap implements ServletContextListener {
      *
      * @see
      * javax.servlet.ServletContextListener#contextInitialized(javax.servlet.ServletContextEvent)
+     *
+     * 当servlet启动时
      */
     @Override
     public void contextInitialized(ServletContextEvent event) {
@@ -143,6 +145,7 @@ public class EurekaBootStrap implements ServletContextListener {
 
     /**
      * init hook for server context. Override for custom logic.
+     * init eureka需要的上下文
      */
     protected void initEurekaServerContext() throws Exception {
         EurekaServerConfig eurekaServerConfig = new DefaultEurekaServerConfig();
@@ -172,7 +175,7 @@ public class EurekaBootStrap implements ServletContextListener {
         }
 
         PeerAwareInstanceRegistry registry;
-        if (isAws(applicationInfoManager.getInfo())) {
+        if (isAws(applicationInfoManager.getInfo())) {//和aws有关
             registry = new AwsInstanceRegistry(
                     eurekaServerConfig,
                     eurekaClient.getEurekaClientConfig(),
@@ -182,6 +185,7 @@ public class EurekaBootStrap implements ServletContextListener {
             awsBinder = new AwsBinderDelegate(eurekaServerConfig, eurekaClient.getEurekaClientConfig(), registry, applicationInfoManager);
             awsBinder.start();
         } else {
+            //PeerAwareInstanceRegistryImpl类，在该类有个register()方法，该方法提供了注册，并且将注册后信息同步到其他的Eureka Server服务
             registry = new PeerAwareInstanceRegistryImpl(
                     eurekaServerConfig,
                     eurekaClient.getEurekaClientConfig(),
@@ -190,6 +194,7 @@ public class EurekaBootStrap implements ServletContextListener {
             );
         }
 
+        //获取其他eureka server的信息
         PeerEurekaNodes peerEurekaNodes = getPeerEurekaNodes(
                 registry,
                 eurekaServerConfig,
@@ -213,6 +218,7 @@ public class EurekaBootStrap implements ServletContextListener {
 
         // Copy registry from neighboring eureka node
         int registryCount = registry.syncUp();
+        //这里会初始化剔除任务，定时执行
         registry.openForTraffic(applicationInfoManager, registryCount);
 
         // Register all monitoring statistics.

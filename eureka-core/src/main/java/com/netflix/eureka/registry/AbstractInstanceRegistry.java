@@ -77,6 +77,9 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     private static final Logger logger = LoggerFactory.getLogger(AbstractInstanceRegistry.class);
 
     private static final String[] EMPTY_STR_ARRAY = new String[0];
+    /**
+     * 存放注册后的信息
+     */
     private final ConcurrentHashMap<String, Map<String, Lease<InstanceInfo>>> registry
             = new ConcurrentHashMap<String, Map<String, Lease<InstanceInfo>>>();
     protected Map<String, RemoteRegionRegistry> regionNameVSRemoteRegistry = new HashMap<String, RemoteRegionRegistry>();
@@ -197,6 +200,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
             REGISTER.increment(isReplication);
             if (gMap == null) {
                 final ConcurrentHashMap<String, Lease<InstanceInfo>> gNewMap = new ConcurrentHashMap<String, Lease<InstanceInfo>>();
+                //放入map中
                 gMap = registry.putIfAbsent(registrant.getAppName(), gNewMap);
                 if (gMap == null) {
                     gMap = gNewMap;
@@ -295,6 +299,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
      * in the remote peers as valid cancellations, so self preservation mode would not kick-in.
      */
     protected boolean internalCancel(String appName, String id, boolean isReplication) {
+        //加读锁
         read.lock();
         try {
             CANCEL.increment(isReplication);
@@ -303,6 +308,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
             if (gMap != null) {
                 leaseToCancel = gMap.remove(id);
             }
+            //加入到最近下线的队列中
             recentCanceledQueue.add(new Pair<Long, String>(System.currentTimeMillis(), appName + "(" + id + ")"));
             InstanceStatus instanceStatus = overriddenInstanceStatusMap.remove(id);
             if (instanceStatus != null) {
@@ -319,6 +325,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 String svip = null;
                 if (instanceInfo != null) {
                     instanceInfo.setActionType(ActionType.DELETED);
+                    //加入到最近有改变的队列中
                     recentlyChangedQueue.add(new RecentlyChangedItem(leaseToCancel));
                     instanceInfo.setLastUpdatedTimestamp();
                     vip = instanceInfo.getVIPAddress();
@@ -595,12 +602,14 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
         // if we do not that, we might wipe out whole apps before self preservation kicks in. By randomizing it,
         // the impact should be evenly distributed across all applications.
         List<Lease<InstanceInfo>> expiredLeases = new ArrayList<>();
+        //遍历所有注册的实例
         for (Entry<String, Map<String, Lease<InstanceInfo>>> groupEntry : registry.entrySet()) {
             Map<String, Lease<InstanceInfo>> leaseMap = groupEntry.getValue();
             if (leaseMap != null) {
                 for (Entry<String, Lease<InstanceInfo>> leaseEntry : leaseMap.entrySet()) {
                     Lease<InstanceInfo> lease = leaseEntry.getValue();
                     if (lease.isExpired(additionalLeaseMs) && lease.getHolder() != null) {
+                        //选出已经过期的实例
                         expiredLeases.add(lease);
                     }
                 }
@@ -628,6 +637,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 String id = lease.getHolder().getId();
                 EXPIRED.increment();
                 logger.warn("DS: Registry: expired lease for {}/{}", appName, id);
+                //调用内部的服务下线方法
                 internalCancel(appName, id, false);
             }
         }
@@ -1182,6 +1192,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
 
     private void invalidateCache(String appName, @Nullable String vipAddress, @Nullable String secureVipAddress) {
         // invalidate cache
+        //使缓存失效
         responseCache.invalidate(appName, vipAddress, secureVipAddress);
     }
 
@@ -1236,6 +1247,9 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
         return overriddenInstanceStatusMap.size();
     }
 
+    /**
+     * 定时任务 剔除没有续约的客户端
+     */
     /* visible for testing */ class EvictionTask extends TimerTask {
 
         private final AtomicLong lastExecutionNanosRef = new AtomicLong(0l);
@@ -1275,6 +1289,10 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
 
     }
 
+    /**
+     * 内部用的循环阻塞队列
+     * @param <E>
+     */
     /* visible for testing */ static class CircularQueue<E> extends AbstractQueue<E> {
 
         private final ArrayBlockingQueue<E> delegate;
@@ -1297,6 +1315,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
 
         @Override
         public boolean offer(E e) {
+            //如果加入失败就poll一个元素，然后retry 直到成功
             while (!delegate.offer(e)) {
                 delegate.poll();
             }

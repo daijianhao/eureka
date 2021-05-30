@@ -74,6 +74,8 @@ public class PeerReplicationResource {
      * @param replicationList
      *            The List of replication events from peer eureka nodes
      * @return A batched response containing the information about the responses of individual events
+     *
+     * 处理其他eureka server同步过来的批量复制信息
      */
     @Path("batch")
     @POST
@@ -96,6 +98,11 @@ public class PeerReplicationResource {
         }
     }
 
+    /**
+     * 这里的复用单个操作的处理方法
+     * @param instanceInfo
+     * @return
+     */
     private ReplicationInstanceResponse dispatch(ReplicationInstance instanceInfo) {
         ApplicationResource applicationResource = createApplicationResource(instanceInfo);
         InstanceResource resource = createInstanceResource(instanceInfo, applicationResource);

@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Helper class to manage lifecycle of a collection of {@link PeerEurekaNode}s.
- *
+ *表示其他eureka server
  * @author Tomasz Bak
  */
 @Singleton
@@ -147,7 +147,7 @@ public class PeerEurekaNodes {
     /**
      * Given new set of replica URLs, destroy {@link PeerEurekaNode}s no longer available, and
      * create new ones.
-     *
+     * 负责更新其他eureka server的URL集合
      * @param newPeerUrls peer node URLs; this collection should have local node's URL filtered out
      */
     protected void updatePeerEurekaNodes(List<String> newPeerUrls) {

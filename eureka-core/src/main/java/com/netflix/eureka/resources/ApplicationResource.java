@@ -131,6 +131,10 @@ public class ApplicationResource {
     }
 
     /**
+     *
+     * 注册一个实例的信息，由客户端通过接口调用到此处
+     * 这个方法会暴露为接口，这里的接口暴露是通过webservice实现的 利用了 Jersey框架
+     *
      * Registers information about a particular instance for an
      * {@link com.netflix.discovery.shared.Application}.
      *

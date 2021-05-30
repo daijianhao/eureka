@@ -23,6 +23,10 @@ import java.util.concurrent.atomic.AtomicReference;
  *   is started, the scheduled automatic update task is discarded (and a new one will be scheduled after the new
  *   on-demand update).
  *
+ *
+ * InstanceInfoReplicator类是在DiscoveryClient初始化过程中使用的，
+ * 其中有一个initScheduledTasks()方法。该方法主要开启了获取服务注册列表的信息，
+ * 如果需要向Eureka Server注册，则开启注册，同时开启了定时向Eureka Server服务续约的定时任务
  *   @author dliu
  */
 class InstanceInfoReplicator implements Runnable {
@@ -31,6 +35,9 @@ class InstanceInfoReplicator implements Runnable {
     private final DiscoveryClient discoveryClient;
     private final InstanceInfo instanceInfo;
 
+    /**
+     * 复制间隔时间
+     */
     private final int replicationIntervalSeconds;
     private final ScheduledExecutorService scheduler;
     private final AtomicReference<Future> scheduledPeriodicRef;
@@ -43,6 +50,7 @@ class InstanceInfoReplicator implements Runnable {
     InstanceInfoReplicator(DiscoveryClient discoveryClient, InstanceInfo instanceInfo, int replicationIntervalSeconds, int burstSize) {
         this.discoveryClient = discoveryClient;
         this.instanceInfo = instanceInfo;
+        //定时调度线程
         this.scheduler = Executors.newScheduledThreadPool(1,
                 new ThreadFactoryBuilder()
                         .setNameFormat("DiscoveryClient-InstanceInfoReplicator-%d")
@@ -114,6 +122,7 @@ class InstanceInfoReplicator implements Runnable {
 
     public void run() {
         try {
+            //刷新实例信息
             discoveryClient.refreshInstanceInfo();
 
             Long dirtyTimestamp = instanceInfo.isDirtyWithTime();
@@ -124,6 +133,7 @@ class InstanceInfoReplicator implements Runnable {
         } catch (Throwable t) {
             logger.warn("There was a problem with the instance info replicator", t);
         } finally {
+            //设置下一回执行时间
             Future next = scheduler.schedule(this, replicationIntervalSeconds, TimeUnit.SECONDS);
             scheduledPeriodicRef.set(next);
         }

@@ -122,10 +122,16 @@ class AcceptorExecutor<ID, T> {
     }
 
     void process(ID id, T task, long expiryTime) {
+        //放入到任务队列
         acceptorQueue.add(new TaskHolder<ID, T>(id, task, expiryTime));
         acceptedTasks++;
     }
 
+    /**
+     * 再次处理
+     * @param holders
+     * @param processingResult
+     */
     void reprocess(List<TaskHolder<ID, T>> holders, ProcessingResult processingResult) {
         reprocessQueue.addAll(holders);
         replayedTasks += holders.size();
@@ -186,6 +192,7 @@ class AcceptorExecutor<ID, T> {
             long scheduleTime = 0;
             while (!isShutdown.get()) {
                 try {
+                    //清空输入队列，此方法返回时只有pendingTask集合中有任务
                     drainInputQueues();
 
                     int totalItems = processingOrder.size();
@@ -219,19 +226,22 @@ class AcceptorExecutor<ID, T> {
 
         private void drainInputQueues() throws InterruptedException {
             do {
+                //清理重试任务队列，并将为完成的任务放入pengdingTask集合中
                 drainReprocessQueue();
+                //清理接受的任务队列，并将为完成的任务放入pengdingTask集合中，acceptorQueue中的任务要晚于reprocessQueue中的任务
                 drainAcceptorQueue();
 
                 if (isShutdown.get()) {
                     break;
                 }
                 // If all queues are empty, block for a while on the acceptor queue
-                if (reprocessQueue.isEmpty() && acceptorQueue.isEmpty() && pendingTasks.isEmpty()) {
+                if (reprocessQueue.isEmpty() && acceptorQueue.isEmpty() && pendingTasks.isEmpty()) {//所有队列都为空了，则在acceptorQueue上等待0ms
                     TaskHolder<ID, T> taskHolder = acceptorQueue.poll(10, TimeUnit.MILLISECONDS);
                     if (taskHolder != null) {
                         appendTaskHolder(taskHolder);
                     }
                 }
+                //reprocessQueue acceptorQueue为空，且pendingTasks不为空时返回
             } while (!reprocessQueue.isEmpty() || !acceptorQueue.isEmpty() || pendingTasks.isEmpty());
         }
 
@@ -244,32 +254,38 @@ class AcceptorExecutor<ID, T> {
         private void drainReprocessQueue() {
             long now = System.currentTimeMillis();
             while (!reprocessQueue.isEmpty() && !isFull()) {
+                //循环从尾部取出重试队列中的任务
                 TaskHolder<ID, T> taskHolder = reprocessQueue.pollLast();
                 ID id = taskHolder.getId();
-                if (taskHolder.getExpiryTime() <= now) {
+                if (taskHolder.getExpiryTime() <= now) {//任务已经过期，则增加过期任务数
                     expiredTasks++;
-                } else if (pendingTasks.containsKey(id)) {
+                } else if (pendingTasks.containsKey(id)) {//任务已经在pending中则增加覆盖任务的次数
                     overriddenTasks++;
                 } else {
+                    //其他情况，则将该任务加入pending集合
                     pendingTasks.put(id, taskHolder);
+                    //将任务按顺序加入processingOrder队列
                     processingOrder.addFirst(id);
                 }
             }
-            if (isFull()) {
+            if (isFull()) {//如果pendingTask满了，则记录队列溢出数量
                 queueOverflows += reprocessQueue.size();
                 reprocessQueue.clear();
             }
         }
 
         private void appendTaskHolder(TaskHolder<ID, T> taskHolder) {
-            if (isFull()) {
+            if (isFull()) {//如果pending队列满了，则将processingOrder中最后进入的任务移除
                 pendingTasks.remove(processingOrder.poll());
+                //记录队列溢出数
                 queueOverflows++;
             }
+            //将任务放入pendingTesk集合中
             TaskHolder<ID, T> previousTask = pendingTasks.put(taskHolder.getId(), taskHolder);
-            if (previousTask == null) {
+            if (previousTask == null) {//之前不存在该任务
                 processingOrder.add(taskHolder.getId());
             } else {
+                //之前已经存在该任务，则增加任务覆盖数
                 overriddenTasks++;
             }
         }
@@ -294,10 +310,16 @@ class AcceptorExecutor<ID, T> {
 
         void assignBatchWork() {
             if (hasEnoughTasksForNextBatch()) {
-                if (batchWorkRequests.tryAcquire(1)) {
+                /**
+                 * 这里的信号灯加锁并没有在本次调用中释放
+                 * 而是在 {@link AcceptorExecutor#requestWorkItems()}中释放的
+                 * 也就是在批任务队列被引用时释放
+                 */
+                if (batchWorkRequests.tryAcquire(1)) {//这里有个同步动作，类似加锁
                     long now = System.currentTimeMillis();
                     int len = Math.min(maxBatchingSize, processingOrder.size());
                     List<TaskHolder<ID, T>> holders = new ArrayList<>(len);
+                    //将多个任务合并为一个
                     while (holders.size() < len && !processingOrder.isEmpty()) {
                         ID id = processingOrder.poll();
                         TaskHolder<ID, T> holder = pendingTasks.remove(id);
@@ -311,6 +333,7 @@ class AcceptorExecutor<ID, T> {
                         batchWorkRequests.release();
                     } else {
                         batchSizeMetric.record(holders.size(), TimeUnit.MILLISECONDS);
+                        //将合并后的任务加入到 batchWorkQueue
                         batchWorkQueue.add(holders);
                     }
                 }

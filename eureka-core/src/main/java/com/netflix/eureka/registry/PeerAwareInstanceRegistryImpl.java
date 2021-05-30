@@ -408,7 +408,9 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
         if (info.getLeaseInfo() != null && info.getLeaseInfo().getDurationInSecs() > 0) {
             leaseDuration = info.getLeaseInfo().getDurationInSecs();
         }
+        //注册一个实例的信息
         super.register(info, leaseDuration, isReplication);
+        //将注册的信息同步到其他Eureka Server
         replicateToPeers(Action.Register, info.getAppName(), info.getId(), info, null, isReplication);
     }
 
@@ -420,6 +422,7 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
      */
     public boolean renew(final String appName, final String id, final boolean isReplication) {
         if (super.renew(appName, id, isReplication)) {
+            //同步到其他eureka server
             replicateToPeers(Action.Heartbeat, appName, id, null, null, isReplication);
             return true;
         }
@@ -638,12 +641,13 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
             if (peerEurekaNodes == Collections.EMPTY_LIST || isReplication) {
                 return;
             }
-
+            // 遍历所有eureka节点，将当前注册的实例信息复制过去
             for (final PeerEurekaNode node : peerEurekaNodes.getPeerEurekaNodes()) {
                 // If the url represents this host, do not replicate to yourself.
                 if (peerEurekaNodes.isThisMyUrl(node.getServiceUrl())) {
                     continue;
                 }
+                //这里会使用到批量处理，即将多个client的动作合并 然后一起发送给 Peer
                 replicateInstanceActionsToPeers(action, appName, id, info, newStatus, node);
             }
         } finally {
@@ -662,6 +666,7 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
         try {
             InstanceInfo infoFromRegistry;
             CurrentRequestVersion.set(Version.V2);
+            //实例的动作类型
             switch (action) {
                 case Cancel:
                     node.cancel(appName, id);

@@ -90,7 +90,7 @@ public class InstanceResource {
     /**
      * A put request for renewing lease from a client instance.
      *
-     * @param isReplication
+     * @param isReplication 是否是来自其他节点的请求
      *            a header parameter containing information whether this is
      *            replicated from other nodes.
      * @param overriddenStatus
@@ -101,6 +101,8 @@ public class InstanceResource {
      *            last timestamp when this instance information was updated.
      * @return response indicating whether the operation was a success or
      *         failure.
+     *
+     * 客户端对续约的处理
      */
     @PUT
     public Response renewLease(
@@ -109,6 +111,7 @@ public class InstanceResource {
             @QueryParam("status") String status,
             @QueryParam("lastDirtyTimestamp") String lastDirtyTimestamp) {
         boolean isFromReplicaNode = "true".equals(isReplication);
+        //续约
         boolean isSuccess = registry.renew(app.getName(), id, isFromReplicaNode);
 
         // Not found in the registry, immediately ask for a register
@@ -295,9 +298,16 @@ public class InstanceResource {
 
     }
 
+    /**
+     * 验证时间 并续约
+     * @param lastDirtyTimestamp
+     * @param isReplication
+     * @return
+     */
     private Response validateDirtyTimestamp(Long lastDirtyTimestamp,
                                             boolean isReplication) {
         InstanceInfo appInfo = registry.getInstanceByAppAndId(app.getName(), id, false);
+        //找到了已经注册的信息
         if (appInfo != null) {
             if ((lastDirtyTimestamp != null) && (!lastDirtyTimestamp.equals(appInfo.getLastDirtyTimestamp()))) {
                 Object[] args = {id, appInfo.getLastDirtyTimestamp(), lastDirtyTimestamp, isReplication};

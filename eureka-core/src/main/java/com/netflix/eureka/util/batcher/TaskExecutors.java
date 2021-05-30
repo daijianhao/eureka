@@ -169,6 +169,11 @@ class TaskExecutors<ID, T> {
         }
     }
 
+    /**
+     * 将普通任务包装为批任务
+     * @param <ID>
+     * @param <T>
+     */
     static class BatchWorkerRunnable<ID, T> extends WorkerRunnable<ID, T> {
 
         BatchWorkerRunnable(String workerName,
@@ -183,16 +188,19 @@ class TaskExecutors<ID, T> {
         public void run() {
             try {
                 while (!isShutdown.get()) {
+                    //拉取到批量任务
                     List<TaskHolder<ID, T>> holders = getWork();
                     metrics.registerExpiryTimes(holders);
-
+                    //取到task
                     List<T> tasks = getTasksOf(holders);
+                    //处理任务
                     ProcessingResult result = processor.process(tasks);
                     switch (result) {
                         case Success:
                             break;
                         case Congestion:
                         case TransientError:
+                            //需要
                             taskDispatcher.reprocess(holders, result);
                             break;
                         case PermanentError:
@@ -209,9 +217,11 @@ class TaskExecutors<ID, T> {
         }
 
         private List<TaskHolder<ID, T>> getWork() throws InterruptedException {
+            //获取到批任务队列
             BlockingQueue<List<TaskHolder<ID, T>>> workQueue = taskDispatcher.requestWorkItems();
             List<TaskHolder<ID, T>> result;
             do {
+                //从队列中获取一个批任务
                 result = workQueue.poll(1, TimeUnit.SECONDS);
             } while (!isShutdown.get() && result == null);
             return (result == null) ? new ArrayList<>() : result;

@@ -38,6 +38,11 @@ class ReplicationTaskProcessor implements TaskProcessor<ReplicationTask> {
         this.peerId = peerId;
     }
 
+    /**
+     * 复制类任务处理函数
+     * @param task
+     * @return
+     */
     @Override
     public ProcessingResult process(ReplicationTask task) {
         try {
@@ -73,10 +78,16 @@ class ReplicationTaskProcessor implements TaskProcessor<ReplicationTask> {
         return ProcessingResult.Success;
     }
 
+    /**
+     * 复制类任务处理函数
+     * @param task
+     * @return
+     */
     @Override
     public ProcessingResult process(List<ReplicationTask> tasks) {
         ReplicationList list = createReplicationListOf(tasks);
         try {
+            //批量提交请求
             EurekaHttpResponse<ReplicationListResponse> response = replicationClient.submitBatchUpdates(list);
             int statusCode = response.getStatusCode();
             if (!isSuccess(statusCode)) {
